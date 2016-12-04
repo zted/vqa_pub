@@ -11,3 +11,4 @@ options['vocab_img_datafile'] = 'vqa_data_prepro.json' # contains unique image i
 # training parameters
 options['max_epochs']=100
 options['patience']= 5
+options['batch_size']=100
