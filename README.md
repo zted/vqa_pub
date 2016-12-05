@@ -8,7 +8,7 @@ Currently the model trains on train and validates on val, so use the appropriate
 
 | Model     		      | val           |
 | ------------------------|:-------------:|
-| LSTM(No embeddings)+CNN | 45.63%        |
+| LSTM(No embeddings)+CNN | 44.98% (Open Ended) 45.05% (MC) |
 
 ##Before you run:
 1. Follow the preprocessing steps from [here](https://github.com/VT-vision-lab/VQA_LSTM_CNN)
