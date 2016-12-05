@@ -21,23 +21,6 @@ def load_positions_ids(filePath):
     return img_train_pos, img_val_pos, q_test_id
 
 
-def getBatchData(data, split, BatchIds):
-    features = data[split]['features']
-
-    question_rep = []
-    answer_rep = []
-    img_rep = np.zeros((len(BatchIds), features.shape[1]))  # only consider one answer for each question
-
-    images_batch = np.asarray(data[split]['images'])[BatchIds]
-    for i, img in enumerate(images_batch):
-        feat_id = img['feat_id']
-        img_rep[i] = data[split]['features'][feat_id]
-        question_rep.append(img['question'])
-        answer_rep.append(img['ans'])
-
-    return img_rep, question_rep, answer_rep
-
-
 def evaluate_and_dump_predictions(pred, qids, qfile, afile, ix_ans_dict):
     """
     dumps predictions to some default file
