@@ -1,8 +1,8 @@
 import h5py
-import numpy as np
 from vqaTools.vqa import VQA
 from vqaEvaluation.vqaEval import VQAEval
 import json
+import os
 
 
 def load_questions_answers(filePath):
@@ -21,7 +21,7 @@ def load_positions_ids(filePath):
     return img_train_pos, img_val_pos, q_test_id
 
 
-def evaluate_and_dump_predictions(pred, qids, qfile, afile, ix_ans_dict):
+def evaluate_and_dump_predictions(pred, qids, qfile, afile, ix_ans_dict, filename):
     """
     dumps predictions to some default file
     :param pred: list of predictions, like [1, 2, 3, 2, ...]. one number for each example
@@ -39,14 +39,25 @@ def evaluate_and_dump_predictions(pred, qids, qfile, afile, ix_ans_dict):
         qa_pair['answer'] = ix_ans_dict[str(val + 1)]  # note indexing diff between python and torch
         answers.append(qa_pair)
     vqa = VQA(afile, qfile)
-    fod_file = './eval/qa_predictions.json'
-    fod = open(fod_file, 'wb')
+    fod = open(filename, 'wb')
     json.dump(answers, fod)
     fod.close()
     # VQA evaluation
-    vqaRes = vqa.loadRes(fod_file, qfile)
+    vqaRes = vqa.loadRes(filename, qfile)
     vqaEval = VQAEval(vqa, vqaRes, n=2)
     vqaEval.evaluate()
     acc = vqaEval.accuracy['overall']
     print("Overall Accuracy is: %.02f\n" % acc)
     return acc
+
+
+def determine_filename(filename, extension=''):
+    keep_iterating = True
+    count = 0
+    while keep_iterating:
+        # making sure to not save the weights as the same as an existing one
+        count += 1
+        unused_name = filename + str(count) + extension
+        if not os.path.isfile(unused_name):
+            keep_iterating = False
+    return unused_name

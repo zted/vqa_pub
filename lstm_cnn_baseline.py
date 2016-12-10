@@ -1,15 +1,14 @@
 import json
 import time
 
+import h5py
 import numpy as np
 from keras.utils.generic_utils import Progbar
 from keras.utils.np_utils import to_categorical
 
-import h5py
 import utils as u
 from config import *
 from keras_models import KerasModel
-import os
 
 dataset_root = options['dataset_root']
 qah5_path = dataset_root + options['qah5']
@@ -30,6 +29,20 @@ a_train = to_categorical(a_train-1, a_train.max())
 
 q_maxlen = len(q_train[0])
 
+# Find the file names that we want to save weights and evaluation to. Make a file
+# there so that other programs that just begin to run won't use the same name
+tmpweights = './tmp/weights'
+tmpweights = u.determine_filename(tmpweights, '.hdf5')
+f = open(tmpweights, 'w')
+f.close()
+
+evaldump = './eval/qa_predictions'
+evaldump = u.determine_filename(evaldump, '.json')
+f = open(evaldump, 'w')
+f.close()
+
+print("Save weights to {}\nDump predictions to {}".format(tmpweights, evaldump))
+
 # prepare data
 print 'Reading %s' % (vocab_img_data_path,)
 data = json.load(open(vocab_img_data_path, 'r'))
@@ -48,21 +61,11 @@ vocab['ix_to_ans'] = data['ix_to_ans']
 vocab['a_vocab_size'] = len(vocab['ix_to_ans'])
 
 # --------------------Training Parameters--------------------
-batch_size = options.get('batch_size', 100)
+batch_size = options.get('batch_size', 128)
 nb_epoch = options.get('max_epochs', 100)
 shuffle = options.get('shuffle', True)
 max_patience = options.get('patience', 5)
 batch_size = options['batch_size']
-
-keep_iterating = True
-count = 0
-cwd = os.getcwd()
-while keep_iterating:
-    # making sure to not save the weights as the same as an existing one
-    count += 1
-    tmpweights = "{}/tmp/weights{}.hdf5".format(cwd, count)
-    if not os.path.isfile(tmpweights):
-        keep_iterating = False
 
 index_array = np.arange(len(q_train))
 
@@ -73,15 +76,12 @@ print('Train...')
 
 best_yet = 0
 patience = 0
-
+total_time = time.time()
 for e in range(nb_epoch):
     print("Training epoch {}".format(e + 1))
     pbar = Progbar(1 + len(q_train) / batch_size)
-    batch_count = 0
-
+    np.random.shuffle(index_array)
     start_time = time.time()
-    if shuffle:
-        np.random.shuffle(index_array)
 
     nb_batch = int(np.ceil(len(index_array) / float(batch_size)))
     train_acc = 0.0
@@ -89,12 +89,13 @@ for e in range(nb_epoch):
         batch_start = batch_index * batch_size
         batch_end = min(len(index_array), (batch_index + 1) * batch_size)
         current_batch_size = batch_end - batch_start
+        training_indices = index_array[batch_start:batch_end]
 
-        q_train_batch = q_train[batch_start:batch_end]
-        i_pos_batch = img_train_pos[batch_start:batch_end]
+        q_train_batch = np.array([q_train[i] for i in training_indices])
+        i_pos_batch = [img_train_pos[i] for i in training_indices]
         i_train_batch = np.array([img_train[i-1] for i in i_pos_batch])
         # i - 1 because positions were recorded as starting from 1
-        a_batch = a_train[batch_start:batch_end]
+        a_batch = np.array([a_train[i] for i in training_indices])
 
         history = model.fit([q_train_batch, i_train_batch], a_batch, batch_size=current_batch_size, nb_epoch=1, verbose=False)
         train_acc += history.history['acc'][-1]
@@ -105,20 +106,26 @@ for e in range(nb_epoch):
     print("\nFinished training epoch {}. Accuracy = {:.3f}".format(e+1, train_acc*100/(batch_size*nb_batch)))
     # the accuracy should be slightly higher, because we are rounding up the number of examples when
     # we multiply batch size * nb_batch
+    print("Time taken to train epoch: {}".format(int(time.time() - start_time)))
 
-    i_val_batch = np.array([img_val[i - 1] for i in img_val_pos])
-    pred = model.predict_classes([q_val, i_val_batch], batch_size=100)
-    val_acc = u.evaluate_and_dump_predictions(pred, q_test_id, quesFile, annFile, vocab['ix_to_ans'])
-    print("Overall Accuracy is: %.02f\n" % val_acc)
+    if (e + 1) % options['epochs_to_validate'] == 0:
+        # we validate every few epochs
+        i_val_batch = np.array([img_val[i - 1] for i in img_val_pos])
+        pred = model.predict_classes([q_val, i_val_batch], batch_size=100)
+        val_acc = u.evaluate_and_dump_predictions(pred, q_test_id, quesFile, annFile, vocab['ix_to_ans'], evaldump)
+        print("Validation Accuracy: {:.3f}\n".format(val_acc))
 
-    if val_acc > best_yet:
-        print('Accuracy improved from {} to {}, saving weights to {}'.format(best_yet, val_acc, tmpweights))
-        best_yet = val_acc
-        model.save_weights(tmpweights, overwrite=True)
-        patience = 0
-    else:
-        patience += 1
+        if val_acc > best_yet:
+            print('Accuracy improved from {} to {}, saving weights to {}'.format(best_yet, val_acc, tmpweights))
+            best_yet = val_acc
+            model.save_weights(tmpweights, overwrite=True)
+            patience = 0
+        else:
+            patience += 1
 
     if patience > max_patience:
-        print('Out of patience. No improvement after {} epochs'.format(patience))
+        print('Out of patience. No improvement after {} epochs'.format(patience*options['epochs_to_validate']))
         break
+
+print("Best accuracy achieved was {}".format(best_yet))
+print("Total time taken was {} seconds".format(time.time() - total_time))

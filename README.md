@@ -6,9 +6,9 @@ Currently the model trains on train and validates on val, so use the appropriate
 
 ##Current numbers (no hyperparameter tuning done)
 
-| Model     		      | val           |
-| ------------------------|:-------------:|
-| LSTM(No embeddings)+CNN | 44.98% (Open Ended) 45.05% (MC) |
+| Model    | val                 |
+| ---------|:-------------------:|
+| LSTM+CNN | 52.15% (Open Ended) |
 
 ##Before you run:
 1. Follow the preprocessing steps from [here](https://github.com/VT-vision-lab/VQA_LSTM_CNN)
